@@ -13,12 +13,12 @@
     ----------------------------------------------------------------------------
 """
 
-# ===== IMPORT ESSENTIALS =====
+# Import the essenstials
 import machine
 from machine import Pin, ADC
 import time
 
-# ============ CONFIGURATION ============
+# configuration
 ANALOG_PIN = 27          # GPIO27 for analog input (AO)
 
 # Calibration value
@@ -30,7 +30,7 @@ DRY_THRESHOLD = 30       # Below this = dry warning
 WET_THRESHOLD = 70       # Above this = wet warning
 
 SAMPLE_INTERVAL = 5      # Seconds between readings
-# =======================================
+
 
 # Initialize analog pin (ADC)
 adc = ADC(Pin(ANALOG_PIN))
@@ -62,8 +62,8 @@ def get_moisture_status(percentage):
         return "Soil moisture is Optimal."
 
 def calibrate_sensor():
-    """Function to find your sensor's dry and wet values"""
-    print("\n=== CALIBRATION MODE ===")
+    """Function to find the sensor's dry and wet values"""
+    print("\----- CALIBRATION MODE -----")
     print("Remove sensor from soil (dry in air)")
     input("Press Enter when ready...")
     
@@ -87,16 +87,15 @@ def calibrate_sensor():
     print(f"\nUpdate these values in your code:")
     print(f"DRY_VALUE = {dry_avg}")
     print(f"WET_VALUE = {wet_avg}")
-    print("======================\n")
+    print("---------------------\n")
 
-# Main monitoring loop
+# Main monitoring loop (continuously monitor soil moisture)
 def monitor_soil():
-    """Main function to continuously monitor soil moisture"""
     print("\n" + "="*50)
     print("SOIL MOISTURE MONITORING SYSTEM")
-    print("="*50)
+    print("-"*50)
     print(f"Dry Threshold: {DRY_THRESHOLD}% | Wet Threshold: {WET_THRESHOLD}%")
-    print("="*50 + "\n")
+    print("-"*50 + "\n")
     
     try:
         while True:
@@ -117,8 +116,8 @@ def monitor_soil():
     except KeyboardInterrupt:
         print("\n\n Monitoring stopped by user")
 
-# ============ RUN PROGRAM ============
-# Uncomment the next line to calibrate your sensor first
+# ---------- RUN PROGRAM -----------
+# Uncomment the next line to calibrate the sensor first
 #calibrate_sensor()
 
 # Start monitoring
