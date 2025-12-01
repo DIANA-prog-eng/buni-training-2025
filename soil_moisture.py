@@ -67,7 +67,7 @@ def calibrate_sensor():
     print("Remove sensor from soil (dry in air)")
     input("Press Enter when ready...")
     
-    dry_readings = []
+    dry_readings = [] #[20,30,10,40] 20
     for i in range(10):
         dry_readings.append(adc.read_u16())
         time.sleep(0.1)

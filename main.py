@@ -1,226 +1,209 @@
-from machine import Pin
-from machine import ADC
-from time import sleep
-from PicoDHT22 import PicoDHT22
-import time
-import urequests
 import network
-import requests
-from time import sleep
+import urequests as requests # MicroPython uses urequests
+import time
+from machine import Pin, ADC
+import dht # Use standard MicroPython DHT library
 
-# Wi-Fi credentials
-ssid = 'Jenga254'
-password = 'JeNg@KenHA07254'
+# --- CONFIGURATION ---
+SSID = 'Jenga254' #wifi name
+PASSWORD = 'JeNg@KenHA07254' #wifi password
 
+# Notification Settings
 SEND_BOTH = True
+PHONE_NUMBER = '+254770554363'
+# REPLACE THESE WITH YOUR ACTUAL KEYS
+WA_API_KEY = '7044765' 
+TG_BOT_TOKEN = "7930559839:AAHzL7RfL2jOMXbK510hS-ytrBZm4qhRfHk"
+TG_CHAT_ID = "64854828"
 
+# Hardware Pins
+DHT_PIN_NUM = 10
+LED_PIN_NUM = 12
+ADC_PIN_NUM = 29 # Note: On Pico W, GP29 is usually VSYS. Ensure you are using the correct ADC pin (GP26, 27, or 28).
 
-phone_number = '+254770554363'
+# Thresholds
+TEMP_HIGH_LIMIT = 30
+HUM_LOW_LIMIT = 40
+TDS_HIGH_LIMIT = 800
 
+# --- CLASSES ---
 
-# Your callmebot API key
-api_key = '7044765'
+class WiFiConnection:
+    @staticmethod
+    def connect(ssid, password):
+        wlan = network.WLAN(network.STA_IF)
+        wlan.active(True)
+        wlan.connect(ssid, password)
+        
+        # Wait for connect
+        max_wait = 10
+        while max_wait > 0:
+            if wlan.status() < 0 or wlan.status() >= 3:
+                break
+            max_wait -= 1
+            print('Waiting for connection...')
+            time.sleep(1)
 
-
-BOT_TOKEN = "7930559839:AAHzL7RfL2jOMXbK510hS-ytrBZm4qhRfHk"
-CHAT_ID = "64854828"
-
-DHT_PIN = 10                    # GPIO pin connected to DHT22 data pin
-READ_INTERVAL = 5.0             # Seconds between readings
-DECIMAL_PLACES = 2              # Number of decimal places for rounding
-
-
-LED_PIN = 12
-BLINK_COUNT = 5
-ON_DURATION = 2.0
-OFF_DURATION = 1.5
-
-adc_pin = 29
-
-
-# Init Wi-Fi Interface
-def init_wifi(ssid, password):
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    # Connect to your network
-    wlan.connect(ssid, password)
-    # Wait for Wi-Fi connection
-    connection_timeout = 10
-    while connection_timeout > 0:
-        if wlan.status() >= 3:
-            break
-        connection_timeout -= 1
-        print('Waiting for Wi-Fi connection...')
-        sleep(1)
-    # Check if connection is successful
-    if wlan.status() != 3:
-        return False
-    else:
-        print('Connection successful!')
-        network_info = wlan.ifconfig()
-        print('IP address:', network_info[0])
-        return True
+        if wlan.status() != 3:
+            print('Network connection failed')
+            return False
+        else:
+            print('Connected')
+            print('IP:', wlan.ifconfig()[0])
+            return True
 
 class WhatsApp:
-    def send_message(self, phone_number, api_key, message):
-        # Set the URL
-        url = f'https://api.callmebot.com/whatsapp.php?phone={phone_number}&text={message}&apikey={api_key}'
+    def __init__(self, phone, api_key):
+        self.phone = phone
+        self.api_key = api_key
 
-        # Make the request
-        response = requests.get(url)
-        # check if it was successful
-        if (response.status_code == 200):
-            print('Success!')
-        else:
-            print('Error')
-            print(response.text)
-    try: 
-        # Connect to WiFi
-        if init_wifi(ssid, password):
-            # Send message to WhatsApp "Hello"
-            # ENTER YOUR MESSAGE BELOW (URL ENCODED) https://www.urlencoder.io/
-            message = 'Hello%20from%20the%20Raspberry%20Pi%20Pico%21' 
-            send_message(phone_number, api_key, message)
-    except Exception as e:
-        print('Error:', e)
-
-
-
+    def send(self, message):
+        # WhatsApp CallMeBot requires URL encoding (spaces = %20)
+        encoded_msg = message.replace(' ', '%20')
+        url = f'https://api.callmebot.com/whatsapp.php?phone={self.phone}&text={encoded_msg}&apikey={self.api_key}'
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                print("WhatsApp Sent!")
+            else:
+                print(f"WhatsApp Error: {response.text}")
+            response.close()
+        except Exception as e:
+            print("WhatsApp Request Failed:", e)
 
 class Telegram:
+    def __init__(self, token, chat_id):
+        self.token = token
+        self.chat_id = chat_id
+
     def send(self, message):
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage?chat_id={self.chat_id}&text={message}"
         try:
-            url = (
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-                f"?chat_id={CHAT_ID}&text={message}"
-                )
-            resp = urequests.get(url)
-            resp.close()
-            return True
+            response = requests.get(url)
+            response.close()
+            print("Telegram Sent!")
         except Exception as e:
-            print("Telegram error:", e)
-            return False
+            print("Telegram Request Failed:", e)
 
-class DHTSensor:
-    def __init__(self, pin):
-        self.sensor = PicoDHT22(Pin(DHT_PIN, Pin.IN, Pin.PULL_UP))
-        
-    def read(self):
-        try:
-            self.sensor.read()
-            temp = self.sensor.temperature()
-            hum = self.sensor.humidity()
-            
-            if temperature is None or humidity is None:
-                print("Error: Failed to read from DHT22 sensor")
-                return None, None
-                
-            return {"temp": temp, "humidity": hum, "status": "OK"}
-        except Exception as e:
-            return {"temp": None, "humidity": None, "status": f"ERROR: {e}"}
-
-class TDSSensor:
-    def __init__(self, adc_pin, vref=3.3):
+class SensorManager:
+    def __init__(self, dht_pin, adc_pin):
+        # Initialize DHT
+        self.dht_sensor = dht.DHT22(Pin(dht_pin))
+        # Initialize ADC
         self.adc = ADC(adc_pin)
-        self.vref = vref
-        
-    def read_raw(self):
-        return self.adc.read_u16()
-    
-    def read_tds(self, temperature):
-        """
-            temperature: float (deg C) from DHT22
-        """
-        
-        #1.) Converting raw ADC reading to voltage
-        raw = self.read_raw()
+        self.vref = 3.3
+
+    def read_dht(self):
+        try:
+            self.dht_sensor.measure()
+            temp = self.dht_sensor.temperature()
+            hum = self.dht_sensor.humidity()
+            return temp, hum
+        except Exception as e:
+            print("DHT Read Error:", e)
+            return None, None
+
+    def read_tds(self, temperature=25):
+        # 1. Read Raw
+        raw = self.adc.read_u16()
+        # 2. Convert to Voltage
         voltage = (raw / 65535.0) * self.vref
-        
-        #2.) Electrical Conductivity (EC) calculation
-        ec = (voltage * 1000) / 560 #Constant is assumed to be 560
-        
-        #3.) Temperature compensation
-        #EC at reference 25°C(room temperature)
+        # 3. Calculate TDS (Approximation)
+        # Simplified TDS logic for demo purposes
+        ec = (voltage * 1000) / 560 
         compensation_coeff = 1 + 0.02 * (temperature - 25)
         ec_25 = ec / compensation_coeff
-        
-        #4.) Converting EC to TDS (typical 0.5 factor)
-        tds = ec_25 * 0.5
-        
-        return {
-            "raw" : raw,
-            "voltage" : round(voltage, 3),
-            "ec" : round(ec_25, 2),
-            "tds" : round(tds, 2),
-            "status" : "OK"
-            }
+        tds_val = ec_25 * 0.5 * 1000 # Scaling up for display visibility usually
+        return round(tds_val, 2)
 
-
-class leds:
-    def __init__(self, LED_PIN):
-        self.led = Pin(LED_PIN, Pin.OUT)
-     
-    def led_off(self):
+class LEDController:
+    def __init__(self, pin):
+        self.led = Pin(pin, Pin.OUT)
         self.led.value(0)
-            
+
+    def alert(self):
+        # Fast blink for alert
+        for _ in range(3):
+            self.led.value(1)
+            time.sleep(0.2)
+            self.led.value(0)
+            time.sleep(0.2)
+
     def normal(self):
+        # Slow blink or solid on to show "System Alive"
         self.led.value(1)
-        sleep(ON_DURATION)
-            
-    def warning(self):
-        self.led.value(1)
-        sleep(0.5)
+        time.sleep(0.1)
         self.led.value(0)
-        sleep(0.5)
-            
-    def blink_led(self, BLINK_COUNT):
-        self.led.value(1)
-        sleep(ON_DURATION)
-        self.led.value(0)
-        sleep(OFF_DURATION)
+
+# --- MAIN PROGRAM ---
 
 def main():
+    # 1. Setup Hardware
+    led_ctrl = LEDController(LED_PIN_NUM)
+    sensors = SensorManager(DHT_PIN_NUM, ADC_PIN_NUM)
     
-    reading_count = 0
-    tds = TDSSensor(tds_pin)
+    # 2. Setup Network
+    if not WiFiConnection.connect(SSID, PASSWORD):
+        print("Stopping program due to WiFi failure.")
+        return
 
-    # Main program loop
+    # 3. Setup Messengers
+    wa = WhatsApp(PHONE_NUMBER, WA_API_KEY)
+    tg = Telegram(TG_BOT_TOKEN, TG_CHAT_ID)
+
+    print("System Started...")
+    
+    # Variables to manage message spamming
+    last_alert_time = 0
+    ALERT_COOLDOWN = 60  # Only send messages once every 60 seconds
+
     while True:
-        reading_count += 1
-        print(f"Reading #{reading_count}:")
+        # Read Sensors
+        temp, hum = sensors.read_dht()
+        
+        # Handle cases where DHT fails
+        current_temp_for_tds = temp if temp is not None else 25
+        tds_val = sensors.read_tds(current_temp_for_tds)
 
-        dht_data = DHTSensor.read()
-        temp = dht_data["temp"]
-        hum = dht_data["hum"]
-        tds_data = TDSSensor.read_tds(dht_data["temp"] if dht_data["temp"] else 25)
-        tg = Telegram()
-        led = leds()
-        tds_ppm = tds_data["tds"]
-        wa = Whatsapp()
-        
-        
-        if temp is not None and hum is not None:
-                # Simple comfort level check
-                if temp > 30:
-                    alert_msg = print("Hot environment detected!")
-                    led.warning()
-                elif hum < 40:
-                    alert_msg = print("Low humidity detected!")
-                    led.warning()
-                elif (temp > 30) & (hum < 40):
-                    alert_msg = print("Ambient conditions")
-                    led.normal()
-        if temp is None or hum is None:
-            led.blink_led()
-            continue
-        if tds_ppm > 800: #ppm
-            led.warning()
-            alert_msg = print(f"High TDS Alert: {tds_ppm} ppm")
-        
-        if SEND_BOTH:
-            wa.send(phone_number, api_key,alert_msg)
-            tg.send(alert_msg)
+        alert_message = ""
+        is_alert = False
+
+        # Check Conditions
+        if temp is not None:
+            print(f"Temp: {temp}C, Hum: {hum}%, TDS: {tds_val}")
+            
+            if temp > TEMP_HIGH_LIMIT:
+                alert_message = f"ALERT: High Temp detected! {temp}C"
+                is_alert = True
+            elif hum < HUM_LOW_LIMIT:
+                alert_message = f"ALERT: Low Humidity! {hum}%"
+                is_alert = True
+            
+            if tds_val > TDS_HIGH_LIMIT:
+                alert_message = f"ALERT: High TDS! {tds_val} ppm"
+                is_alert = True
         else:
-            wa.send(alert_msg)
-        
-    
+            print("Sensor Error: Could not read DHT22")
+
+        # Handle Alerts
+        if is_alert:
+            led_ctrl.alert()
+            
+            # Check if enough time has passed since last message
+            if (time.time() - last_alert_time) > ALERT_COOLDOWN:
+                print(f"Sending Message: {alert_message}")
+                
+                if SEND_BOTH:
+                    wa.send(alert_message)
+                    tg.send(alert_message)
+                else:
+                    wa.send(alert_message)
+                
+                last_alert_time = time.time() # Reset cooldown
+        else:
+            led_ctrl.normal()
+
+        time.sleep(5)
+
+if __name__ == "__main__":
+    main()
